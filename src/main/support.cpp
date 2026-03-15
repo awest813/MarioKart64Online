@@ -1,10 +1,13 @@
 #include "zelda_support.h"
 #include <SDL.h>
+#ifndef __EMSCRIPTEN__
 #include "nfd.h"
+#endif
 #include "RmlUi/Core.h"
 
 namespace zelda64 {
     // MARK: - Internal Helpers
+#ifndef __EMSCRIPTEN__
     void perform_file_dialog_operation(const std::function<void(bool, const std::filesystem::path&)>& callback) {
         nfdnchar_t* native_path = nullptr;
         nfdresult_t result = NFD_OpenDialogN(&native_path, nullptr, 0, nullptr);
@@ -42,6 +45,7 @@ namespace zelda64 {
 
         callback(success, paths);
     }
+#endif // !__EMSCRIPTEN__
 
     // MARK: - Public API
 
@@ -60,7 +64,11 @@ namespace zelda64 {
     }
 
     void open_file_dialog(std::function<void(bool success, const std::filesystem::path& path)> callback) {
-#ifdef __APPLE__
+#ifdef __EMSCRIPTEN__
+        // Native file dialogs are not available in the browser.
+        // The ROM is expected to be provided via the web page UI.
+        callback(false, {});
+#elif defined(__APPLE__)
         dispatch_on_ui_thread([callback]() {
             perform_file_dialog_operation(callback);
         });
@@ -70,7 +78,10 @@ namespace zelda64 {
     }
 
     void open_file_dialog_multiple(std::function<void(bool success, const std::list<std::filesystem::path>& paths)> callback) {
-#ifdef __APPLE__
+#ifdef __EMSCRIPTEN__
+        // Native file dialogs are not available in the browser.
+        callback(false, {});
+#elif defined(__APPLE__)
         dispatch_on_ui_thread([callback]() {
             perform_file_dialog_operation_multiple(callback);
         });
@@ -80,7 +91,9 @@ namespace zelda64 {
     }
 
     void show_error_message_box(const char *title, const char *message) {
-#ifdef __APPLE__
+#ifdef __EMSCRIPTEN__
+        fprintf(stderr, "Error: %s - %s\n", title, message);
+#elif defined(__APPLE__)
     std::string title_copy(title);
     std::string message_copy(message);
 

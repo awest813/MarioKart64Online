@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mario Kart 64: Recompiled</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+      color: #eee;
+    }
+    #canvas-container {
+      position: relative;
+      width: 100%;
+      max-width: 1280px;
+    }
+    canvas#canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #000;
+      /* Prevent the browser from blurring pixel-art content. */
+      image-rendering: pixelated;
+    }
+    #status-bar {
+      width: 100%;
+      max-width: 1280px;
+      padding: 6px 0;
+      font-size: 0.85rem;
+      color: #aaa;
+      text-align: center;
+    }
+    #progress-container {
+      width: 100%;
+      max-width: 1280px;
+      height: 4px;
+      background: #222;
+    }
+    #progress {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #e84a00, #ffb800);
+      transition: width 0.2s ease;
+    }
+    #rom-picker {
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    #rom-picker label {
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+    #rom-picker input[type="file"] {
+      display: none;
+    }
+    #rom-picker .pick-btn {
+      padding: 10px 28px;
+      border: none;
+      border-radius: 4px;
+      background: #e84a00;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #rom-picker .pick-btn:hover { background: #ff6a1a; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!--
+    ROM picker — shown before the WASM module starts.
+    The user must supply their own copy of the US release of Mario Kart 64.
+  -->
+  <div id="rom-picker">
+    <label>Provide your copy of the US release of Mario Kart 64 (.z64 / .n64 / .v64)</label>
+    <button class="pick-btn" onclick="document.getElementById('rom-input').click()">
+      Select ROM file…
+    </button>
+    <input type="file" id="rom-input" accept=".z64,.n64,.v64" />
+  </div>
+
+  <div id="canvas-container" class="hidden">
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  </div>
+
+  <div id="progress-container" class="hidden">
+    <div id="progress"></div>
+  </div>
+
+  <div id="status-bar">Loading…</div>
+
+  <script type="text/javascript">
+    // ---------------------------------------------------------------------------
+    // ROM staging — write the selected ROM into the Emscripten virtual FS so the
+    // game loader can find it at the path it expects.
+    // ---------------------------------------------------------------------------
+    const ROM_PATH = '/mk64.us.z64';
+
+    document.getElementById('rom-input').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const data = new Uint8Array(ev.target.result);
+
+        // Write into the virtual FS once the module is ready, or queue for later.
+        if (typeof FS !== 'undefined') {
+          FS.writeFile(ROM_PATH, data);
+        } else {
+          window._pendingRom = data;
+        }
+
+        document.getElementById('rom-picker').classList.add('hidden');
+        document.getElementById('canvas-container').classList.remove('hidden');
+        document.getElementById('progress-container').classList.remove('hidden');
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // ---------------------------------------------------------------------------
+    // Emscripten module configuration
+    // ---------------------------------------------------------------------------
+    var Module = {
+      canvas: (function () {
+        return document.getElementById('canvas');
+      })(),
+
+      print: function (text) {
+        console.log(text);
+      },
+      printErr: function (text) {
+        console.error(text);
+      },
+
+      setStatus: function (text) {
+        var bar    = document.getElementById('status-bar');
+        var fill   = document.getElementById('progress');
+        if (!text) {
+          bar.textContent = 'Ready';
+          fill.style.width = '100%';
+          return;
+        }
+        bar.textContent = text;
+        // Extract "X/Y" progress if present.
+        var match = text.match(/(\d+)\/(\d+)/);
+        if (match) {
+          fill.style.width = (100 * parseInt(match[1]) / parseInt(match[2])) + '%';
+        }
+      },
+
+      monitorRunDependencies: function (left) {
+        if (left === 0) {
+          Module.setStatus('');
+        }
+      },
+
+      onRuntimeInitialized: function () {
+        // If the user selected the ROM before the runtime was ready, write it now.
+        if (window._pendingRom) {
+          FS.writeFile(ROM_PATH, window._pendingRom);
+          window._pendingRom = null;
+        }
+      },
+    };
+
+    window.onerror = function (event) {
+      Module.setStatus('Error: ' + event);
+    };
+  </script>
+
+  <!-- The Emscripten-generated loader is injected here by the linker. -->
+  {{{ SCRIPT }}}
+</body>
+</html>

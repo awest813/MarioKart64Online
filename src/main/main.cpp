@@ -8,13 +8,19 @@
 #include <stdexcept>
 #include <cinttypes>
 
+#ifndef __EMSCRIPTEN__
 #include "nfd.h"
+#endif
 
 #include "ultramodern/ultra64.h"
 #include "ultramodern/ultramodern.hpp"
 #define SDL_MAIN_HANDLED
 #ifdef _WIN32
 #include "SDL.h"
+#elif defined(__EMSCRIPTEN__)
+#include <SDL2/SDL.h>
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #else
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_syswm.h"
@@ -140,6 +146,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 
 #if defined(__APPLE__)
     flags |= SDL_WINDOW_METAL;
+#elif defined(__EMSCRIPTEN__)
+    flags |= SDL_WINDOW_OPENGL;
 #elif defined(RT64_SDL_WINDOW_VULKAN)
     flags |= SDL_WINDOW_VULKAN;
 #endif
@@ -164,6 +172,10 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 
 #if defined(_WIN32)
     return ultramodern::renderer::WindowHandle{ wmInfo.info.win.window, GetCurrentThreadId() };
+#elif defined(__EMSCRIPTEN__)
+    // In the browser there is no native window handle; pass the SDL window
+    // directly so the renderer can use it to create a WebGL context.
+    return ultramodern::renderer::WindowHandle{ window };
 #elif defined(__linux__) || defined(__ANDROID__)
     return ultramodern::renderer::WindowHandle{ window };
 #elif defined(__APPLE__)
@@ -742,6 +754,7 @@ int main(int argc, char** argv) {
         threads_callbacks
     );
 
+#ifndef __EMSCRIPTEN__
     NFD_Quit();
 
     if (preloaded) {
@@ -752,6 +765,7 @@ int main(int argc, char** argv) {
     // End high resolution timing period.
     timeEndPeriod(1);
     #endif
+#endif
 
     return EXIT_SUCCESS;
 }
