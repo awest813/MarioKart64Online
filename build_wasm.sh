@@ -37,6 +37,6 @@ ls -lh "${BUILD_DIR}/MarioKart64Recompiled.html" \
        "${BUILD_DIR}/MarioKart64Recompiled.js"   \
        "${BUILD_DIR}/MarioKart64Recompiled.wasm"  2>/dev/null || true
 echo ""
-echo "To serve locally:"
-echo "  cd ${BUILD_DIR} && python3 -m http.server 8080"
+echo "To serve locally (COOP/COEP headers required for SharedArrayBuffer / pthreads):"
+echo "  cd ${BUILD_DIR} && python3 ../src/wasm/server.py"
 echo "Then open http://localhost:8080/MarioKart64Recompiled.html in a browser."

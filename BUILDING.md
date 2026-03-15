@@ -114,15 +114,22 @@ The linker will produce three files inside `build-wasm/`:
 ### Running
 
 Because of browser security restrictions, the files must be served over HTTP
-(not opened from the filesystem directly):
+(not opened from the filesystem directly).  The `Cross-Origin-Opener-Policy`
+and `Cross-Origin-Embedder-Policy` headers are also required to enable
+`SharedArrayBuffer` (used by pthreads).  Use the bundled helper server:
 
 ```bash
 cd build-wasm
-python3 -m http.server 8080
+python3 ../src/wasm/server.py          # default port 8080
+python3 ../src/wasm/server.py 9000     # custom port
 ```
 
 Then open <http://localhost:8080/MarioKart64Recompiled.html> in a modern
-browser (Chrome / Firefox / Edge with SharedArrayBuffer enabled).
+browser (Chrome / Firefox / Edge).
+
+Alternatively, if you prefer `python3 -m http.server`, you must add the COOP
+and COEP headers through another means (e.g. a browser extension or `nginx`
+config) otherwise the game will not start.
 
 ### Notes
 
@@ -130,10 +137,15 @@ browser (Chrome / Firefox / Edge with SharedArrayBuffer enabled).
   copy of the **US release** of Mario Kart 64 at runtime — no server-side ROM
   storage is involved.  Only the US (NTSC) version is supported; other regional
   releases will be rejected by the game loader.
-* **SharedArrayBuffer** must be enabled in the browser for multi-threaded
-  operation.  When serving locally with Python the necessary COOP/COEP headers
-  are not set by default; use a small server wrapper or browser flags for
-  testing.
+* **Audio:** the page shows an "Enable audio & start" button before launching
+  the game.  This click acts as the required user gesture that lets the browser
+  allow audio output.
+* **Persistent storage:** configuration and save files are stored in the
+  browser's IndexedDB (mounted at `/config` inside the WASM virtual filesystem)
+  and survive page reloads.  Data is flushed to IndexedDB every 10 seconds
+  while the game is running.
+* **Fullscreen:** use the ⛶ button in the top-right corner of the canvas, or
+  press F11 / the browser's own fullscreen shortcut.
 * The native graphics back-end (RT64) uses Vulkan / DirectX 12 / Metal which
   are not available in browsers.  Porting the renderer to WebGL / WebGPU is the
   main remaining work item.
