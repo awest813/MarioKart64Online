@@ -67,7 +67,7 @@ const std::string version_string = "0.9.2";
 template<typename... Ts>
 void exit_error(const char* str, Ts ...args) {
     // TODO pop up an error
-    ((void)fprintf(stderr, str, args), ...);
+    (void)fprintf(stderr, str, args...);
     assert(false);
         
     ultramodern::error_handling::quick_exit(__FILE__, __LINE__, __FUNCTION__);
@@ -240,7 +240,10 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
     }
     
     // TODO handle cases where a chunk is smaller than the duplicated frame count.
-    assert(sample_count > duplicated_input_frames * input_channels);
+    if (sample_count <= duplicated_input_frames * input_channels) {
+        // Chunk is too small to safely update the interpolation buffer; skip it.
+        return;
+    }
 
     // Copy the last converted samples into the duplicated sample buffer to reuse in resampling the next queued chunk.
     for (size_t i = 0; i < duplicated_input_frames * input_channels; i++) {

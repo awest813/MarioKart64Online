@@ -139,11 +139,7 @@ RECOMP_PATCH void race_logic_loop(void) {
             break;
 
         case SCREEN_MODE_2P_SPLITSCREEN_VERTICAL:
-            if (gCurrentCourseId == COURSE_DK_JUNGLE) {
-                gTickSpeed = 2;
-            } else {
-                gTickSpeed = 2;
-            }
+            gTickSpeed = 2;
             if (gIsGamePaused == 0) {
                 for (i = 0; i < gTickSpeed; i++) {
                     if (D_8015011E != 0) {
@@ -183,12 +179,7 @@ RECOMP_PATCH void race_logic_loop(void) {
             break;
 
         case SCREEN_MODE_2P_SPLITSCREEN_HORIZONTAL:
-
-            if (gCurrentCourseId == COURSE_DK_JUNGLE) {
-                gTickSpeed = 2;
-            } else {
-                gTickSpeed = 2;
-            }
+            gTickSpeed = 2;
 
             if (gIsGamePaused == 0) {
                 for (i = 0; i < gTickSpeed; i++) {
