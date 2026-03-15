@@ -635,7 +635,7 @@ float recomp::get_input_analog(const recomp::InputField& field) {
         // TODO mouse support
         return 0.0f;
     case InputType::None:
-        return false;
+        return 0.0f;
     }
 }
 

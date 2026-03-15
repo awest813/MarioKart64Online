@@ -43,7 +43,6 @@ RECOMP_PATCH void create_gfx_task_structure(void) {
         gGfxSPTask->task.t.ucode = gspF3DLXTextStart;
         gGfxSPTask->task.t.ucode_data = gspF3DLXDataStart;
     }
-    gGfxSPTask->task.t.flags = 0;
     gGfxSPTask->task.t.flags = OS_TASK_DP_WAIT;
     gGfxSPTask->task.t.ucode_size = SP_UCODE_SIZE;
     gGfxSPTask->task.t.ucode_data_size = SP_UCODE_DATA_SIZE;
@@ -59,13 +58,13 @@ RECOMP_PATCH void create_gfx_task_structure(void) {
     gGfxSPTask->task.t.yield_data_ptr = (u64*) &gGfxSPTaskYieldBuffer;
     gGfxSPTask->task.t.yield_data_size = OS_YIELD_DATA_SIZE;
 
-    u32 bytesLeft = (GFX_POOL_EXTENDED_SIZE * 8 - gGfxSPTask->task.t.data_size);
-    // recomp_printf("bytesLeft: %d\n\n", bytesLeft);
-    if (bytesLeft < 0) {
+    u32 poolMaxBytes = (u32)(GFX_POOL_EXTENDED_SIZE * 8);
+    if (gGfxSPTask->task.t.data_size > poolMaxBytes) {
         // CRASH
-        recomp_printf("GFXPOOL is full!\n bytesLeft: %x\n\n", bytesLeft);
+        recomp_printf("GFXPOOL is full!\n data_size: %x\n\n", gGfxSPTask->task.t.data_size);
         *(volatile int*) 0 = 0;
     }
+    u32 bytesLeft = poolMaxBytes - gGfxSPTask->task.t.data_size;
 }
 #endif
 
