@@ -395,6 +395,14 @@ if (EMSCRIPTEN)
         "SHELL:-sPTHREAD_POOL_SIZE=8"
         # Emit a .wasm file alongside the JS loader.
         "SHELL:-sWASM=1"
+        # Include the IndexedDB filesystem for persistent save data.
+        "SHELL:-lidbfs.js"
+        # Expose the JS-side FS API and ccall/cwrap so that the shell page can
+        # mount IDBFS, write the ROM into the virtual filesystem, and invoke
+        # exported C functions from JavaScript.
+        "SHELL:-sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap"
+        # Export _main so that the shell can defer its invocation if needed.
+        "SHELL:-sEXPORTED_FUNCTIONS=_main"
         # Use the custom HTML shell that provides the canvas element.
         "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/src/wasm/shell.html"
     )

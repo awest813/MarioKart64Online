@@ -29,6 +29,23 @@
       /* Prevent the browser from blurring pixel-art content. */
       image-rendering: pixelated;
     }
+    #overlay-buttons {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+    }
+    .overlay-btn {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid #555;
+      color: #ddd;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .overlay-btn:hover { background: rgba(60,60,60,0.8); }
     #status-bar {
       width: 100%;
       max-width: 1280px;
@@ -73,10 +90,74 @@
       cursor: pointer;
     }
     #rom-picker .pick-btn:hover { background: #ff6a1a; }
+    #audio-unlock {
+      margin: 12px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    #audio-unlock p { font-size: 0.85rem; color: #aaa; }
+    #audio-unlock button {
+      padding: 8px 24px;
+      border: none;
+      border-radius: 4px;
+      background: #1a6eb8;
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #audio-unlock button:hover { background: #2280d4; }
+    #warning-banner {
+      width: 100%;
+      max-width: 1280px;
+      background: #7a3900;
+      border: 1px solid #e84a00;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      color: #ffd0a0;
+      margin-bottom: 6px;
+    }
+    #error-banner {
+      width: 100%;
+      max-width: 1280px;
+      background: #5a0000;
+      border: 1px solid #c00;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      color: #ffaaaa;
+      margin-bottom: 6px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
+  <!--
+    Shown when COOP/COEP headers are absent (SharedArrayBuffer unavailable).
+    The check runs in JavaScript below; the banner is hidden by default.
+  -->
+  <div id="warning-banner" class="hidden">
+    ⚠️ <strong>SharedArrayBuffer is not available.</strong>
+    Multi-threaded operation (pthreads) requires the page to be served with the
+    <code>Cross-Origin-Opener-Policy: same-origin</code> and
+    <code>Cross-Origin-Embedder-Policy: require-corp</code> HTTP headers.
+    Use <code>server.py</code> from <code>src/wasm/</code> instead of a plain
+    <code>python3 -m http.server</code> to set these headers automatically.
+  </div>
+
+  <!--
+    Error banner — populated and shown when the Emscripten runtime reports an
+    unrecoverable error so that users get a readable message instead of a blank
+    page.
+  -->
+  <div id="error-banner" class="hidden"></div>
+
   <!--
     ROM picker — shown before the WASM module starts.
     The user must supply their own copy of the US release of Mario Kart 64.
@@ -89,8 +170,22 @@
     <input type="file" id="rom-input" accept=".z64,.n64,.v64" />
   </div>
 
+  <!--
+    Audio-unlock prompt — shown after the ROM is selected.
+    Browsers block audio until a user gesture occurs; clicking this button
+    creates (and resumes) an AudioContext before the WASM module starts, which
+    prevents SDL2's audio device from opening in a suspended state.
+  -->
+  <div id="audio-unlock" class="hidden">
+    <p>Click below to enable audio, then the game will start.</p>
+    <button id="audio-unlock-btn">▶ Enable audio &amp; start</button>
+  </div>
+
   <div id="canvas-container" class="hidden">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="overlay-buttons">
+      <button class="overlay-btn" id="fullscreen-btn" title="Toggle fullscreen">⛶ Fullscreen</button>
+    </div>
   </div>
 
   <div id="progress-container" class="hidden">
@@ -101,81 +196,177 @@
 
   <script type="text/javascript">
     // ---------------------------------------------------------------------------
+    // COOP/COEP check — warn early if SharedArrayBuffer is unavailable.
+    // ---------------------------------------------------------------------------
+    if (typeof SharedArrayBuffer === 'undefined') {
+      document.getElementById('warning-banner').classList.remove('hidden');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Fullscreen toggle
+    // ---------------------------------------------------------------------------
+    document.getElementById('fullscreen-btn').addEventListener('click', function () {
+      var container = document.getElementById('canvas-container');
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch(function (err) {
+          console.warn('Fullscreen request failed:', err);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', function () {
+      var btn = document.getElementById('fullscreen-btn');
+      btn.textContent = document.fullscreenElement ? '✕ Exit fullscreen' : '⛶ Fullscreen';
+    });
+
+    // ---------------------------------------------------------------------------
     // ROM staging — write the selected ROM into the Emscripten virtual FS so the
     // game loader can find it at the path it expects.
     // ---------------------------------------------------------------------------
     const ROM_PATH = '/mk64.us.z64';
+    var _pendingRomData = null;
 
     document.getElementById('rom-input').addEventListener('change', function (e) {
-      const file = e.target.files[0];
+      var file = e.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
+      var reader = new FileReader();
       reader.onload = function (ev) {
-        const data = new Uint8Array(ev.target.result);
+        _pendingRomData = new Uint8Array(ev.target.result);
 
-        // Write into the virtual FS once the module is ready, or queue for later.
-        if (typeof FS !== 'undefined') {
-          FS.writeFile(ROM_PATH, data);
-        } else {
-          window._pendingRom = data;
-        }
-
+        // Hide the ROM picker and show the audio-unlock prompt.
         document.getElementById('rom-picker').classList.add('hidden');
-        document.getElementById('canvas-container').classList.remove('hidden');
-        document.getElementById('progress-container').classList.remove('hidden');
+        document.getElementById('audio-unlock').classList.remove('hidden');
       };
       reader.readAsArrayBuffer(file);
     });
 
     // ---------------------------------------------------------------------------
-    // Emscripten module configuration
+    // Audio unlock — create an AudioContext on the button click (user gesture)
+    // so the browser allows audio output once the WASM module opens a device.
     // ---------------------------------------------------------------------------
-    var Module = {
-      canvas: (function () {
-        return document.getElementById('canvas');
-      })(),
+    var _audioContext = null;
 
-      print: function (text) {
-        console.log(text);
-      },
-      printErr: function (text) {
-        console.error(text);
-      },
-
-      setStatus: function (text) {
-        var bar    = document.getElementById('status-bar');
-        var fill   = document.getElementById('progress');
-        if (!text) {
-          bar.textContent = 'Ready';
-          fill.style.width = '100%';
-          return;
+    document.getElementById('audio-unlock-btn').addEventListener('click', function () {
+      // Create and immediately resume an AudioContext to satisfy the browser's
+      // autoplay policy.  The SDL2 WebAudio backend will use this same context
+      // (or create a new one that is already allowed because a gesture occurred).
+      try {
+        _audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (_audioContext.state === 'suspended') {
+          _audioContext.resume();
         }
-        bar.textContent = text;
-        // Extract "X/Y" progress if present.
-        var match = text.match(/(\d+)\/(\d+)/);
-        if (match) {
-          fill.style.width = (100 * parseInt(match[1]) / parseInt(match[2])) + '%';
-        }
-      },
+      } catch (e) {
+        console.warn('AudioContext creation failed (audio may be silent):', e);
+      }
 
-      monitorRunDependencies: function (left) {
-        if (left === 0) {
-          Module.setStatus('');
-        }
-      },
+      // Switch to the game view.
+      document.getElementById('audio-unlock').classList.add('hidden');
+      document.getElementById('canvas-container').classList.remove('hidden');
+      document.getElementById('progress-container').classList.remove('hidden');
+      document.getElementById('status-bar').textContent = 'Initializing…';
 
-      onRuntimeInitialized: function () {
-        // If the user selected the ROM before the runtime was ready, write it now.
-        if (window._pendingRom) {
-          FS.writeFile(ROM_PATH, window._pendingRom);
-          window._pendingRom = null;
-        }
-      },
-    };
+      // Now that we have a user gesture, write the ROM and start the module.
+      _startModule();
+    });
 
-    window.onerror = function (event) {
-      Module.setStatus('Error: ' + event);
+    // ---------------------------------------------------------------------------
+    // Module bootstrap — called after the user gesture so that audio and FS
+    // are ready before the C runtime runs.
+    // ---------------------------------------------------------------------------
+    function _startModule() {
+      // The Emscripten-generated loader reads the global `Module` object.
+      // We populate it here (after ROM data is available) rather than inline so
+      // that the object is complete when the loader script executes.
+      window.Module = {
+        canvas: document.getElementById('canvas'),
+
+        print: function (text) { console.log(text); },
+        printErr: function (text) { console.error(text); },
+
+        // ---------------------------------------------------------------------------
+        // preRun — runs after the Emscripten FS is ready but before main().
+        // Mount IndexedDB-backed IDBFS at /config for persistent save data and
+        // settings, then block main() until the initial sync from IDB completes.
+        // ---------------------------------------------------------------------------
+        preRun: [function () {
+          // Write the ROM into the virtual FS so the game loader can find it.
+          if (_pendingRomData) {
+            FS.writeFile(ROM_PATH, _pendingRomData);
+            _pendingRomData = null;
+          }
+
+          // Mount IDBFS and populate it from IndexedDB before the game reads
+          // saved settings.  addRunDependency / removeRunDependency let us delay
+          // main() until the async sync finishes.
+          Module.addRunDependency('idbfs-mount');
+          try { FS.mkdir('/config'); } catch (e) { /* EEXIST is fine */ }
+          FS.mount(IDBFS, {}, '/config');
+          FS.syncfs(true, function (err) {
+            if (err) {
+              console.warn('[IDBFS] initial sync from IndexedDB failed:', err);
+            }
+            Module.removeRunDependency('idbfs-mount');
+          });
+        }],
+
+        setStatus: function (text) {
+          var bar  = document.getElementById('status-bar');
+          var fill = document.getElementById('progress');
+          if (!text) {
+            bar.textContent = 'Ready';
+            fill.style.width = '100%';
+            return;
+          }
+          bar.textContent = text;
+          // Extract "X/Y" progress if present.
+          var match = text.match(/(\d+)\/(\d+)/);
+          if (match) {
+            fill.style.width = (100 * parseInt(match[1]) / parseInt(match[2])) + '%';
+          }
+        },
+
+        monitorRunDependencies: function (left) {
+          if (left === 0) {
+            Module.setStatus('');
+          }
+        },
+
+        onRuntimeInitialized: function () {
+          // If for some reason the ROM wasn't written in preRun, try again now.
+          if (_pendingRomData) {
+            FS.writeFile(ROM_PATH, _pendingRomData);
+            _pendingRomData = null;
+          }
+
+          // Flush IDBFS to IndexedDB every 10 seconds so that config changes
+          // and save files are persisted between page loads.  The ID is stored
+          // so it can be cancelled if the page is torn down (e.g. hot-reload
+          // in development tools).
+          window._idbfsSyncInterval = setInterval(function () {
+            FS.syncfs(false, function (err) {
+              if (err) console.warn('[IDBFS] periodic flush failed:', err);
+            });
+          }, 10000);
+        },
+      };
+
+      // Dynamically insert the Emscripten-generated loader script now that the
+      // Module object is ready.  The {{{ SCRIPT }}} placeholder below is where
+      // the linker normally injects the <script> tag; because we build the
+      // Module object at runtime we rely on that injection point directly.
+    }
+
+    window.onerror = function (message, source, lineno, colno, error) {
+      var banner = document.getElementById('error-banner');
+      banner.textContent = 'Fatal error: ' + message +
+        (source ? '\n  at ' + source + ':' + lineno + ':' + colno : '');
+      banner.classList.remove('hidden');
+      if (typeof Module !== 'undefined' && Module.setStatus) {
+        Module.setStatus('Error — see message above');
+      }
     };
   </script>
 

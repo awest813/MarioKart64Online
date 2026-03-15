@@ -17,6 +17,8 @@
 #include <pwd.h>
 #elif defined(__APPLE__)
 #include "apple/rt64_apple.h"
+#elif defined(__EMSCRIPTEN__)
+#include <emscripten.h>
 #endif
 
 constexpr std::u8string_view general_filename = u8"general.json";
@@ -132,6 +134,10 @@ namespace recomp {
 }
 
 std::filesystem::path zelda64::get_app_folder_path() {
+#if defined(__EMSCRIPTEN__)
+   // In the browser, data lives in an IndexedDB-backed IDBFS mount at /config.
+   return std::filesystem::path{"/config"};
+#else
    // directly check for portable.txt (windows and native linux binary)
    if (std::filesystem::exists("portable.txt")) {
        return std::filesystem::current_path();
@@ -185,6 +191,7 @@ std::filesystem::path zelda64::get_app_folder_path() {
 #endif
 
     return recomp_dir;
+#endif // !__EMSCRIPTEN__
 }
 
 bool read_json(std::ifstream input_file, nlohmann::json& json_out) {

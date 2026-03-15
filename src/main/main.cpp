@@ -166,16 +166,17 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
         exit_error("Failed to create window: %s\n", SDL_GetError());
     }
 
+#if defined(__EMSCRIPTEN__)
+    // In the browser there is no native window handle; pass the SDL window
+    // directly so the renderer can use it to create a WebGL context.
+    return ultramodern::renderer::WindowHandle{ window };
+#else
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
     SDL_GetWindowWMInfo(window, &wmInfo);
 
 #if defined(_WIN32)
     return ultramodern::renderer::WindowHandle{ wmInfo.info.win.window, GetCurrentThreadId() };
-#elif defined(__EMSCRIPTEN__)
-    // In the browser there is no native window handle; pass the SDL window
-    // directly so the renderer can use it to create a WebGL context.
-    return ultramodern::renderer::WindowHandle{ window };
 #elif defined(__linux__) || defined(__ANDROID__)
     return ultramodern::renderer::WindowHandle{ window };
 #elif defined(__APPLE__)
@@ -184,6 +185,7 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 #else
     static_assert(false && "Unimplemented");
 #endif
+#endif // __EMSCRIPTEN__
 }
 
 void update_gfx(void*) {
