@@ -4,6 +4,11 @@ if (APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
 endif()
 
+# Detect Emscripten (WASM) toolchain early so platform checks below can use it
+if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR DEFINED EMSCRIPTEN)
+    set(EMSCRIPTEN TRUE)
+endif()
+
 project(MarioKart64Recompiled LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
@@ -14,6 +19,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-everything /W4")
+endif()
+
+if (EMSCRIPTEN)
+    # Wasm output: produce an HTML page + JS loader + .wasm file in one step.
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+
+    # Tell the rest of the build system not to look for native libraries that
+    # do not exist in the Emscripten sysroot.
+    set(SDL2_FOUND TRUE)
+    set(FREETYPE_FOUND TRUE)
+
+    # Disable features that have no browser equivalent.
+    add_compile_definitions(RECOMP_WASM)
 endif()
 
 # Opt out of constexpr mutex constructor on windows to prevent vcredist issues
@@ -352,6 +370,36 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(MarioKart64Recompiled PRIVATE "-latomic -static-libstdc++" ${CMAKE_DL_LIBS} Threads::Threads)
 endif()
 
+if (EMSCRIPTEN)
+    # SDL2 and pthreads are bundled with Emscripten; use them via port flags.
+    target_compile_options(MarioKart64Recompiled PRIVATE
+        "SHELL:-sUSE_SDL=2"
+        "SHELL:-sUSE_PTHREADS=1"
+    )
+
+    target_link_options(MarioKart64Recompiled PRIVATE
+        # Use Emscripten's bundled SDL2 port.
+        "SHELL:-sUSE_SDL=2"
+        # Enable WebGL 2 (OpenGL ES 3).
+        "SHELL:-sFULL_ES3=1"
+        # Allow the WASM heap to grow as needed.
+        "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        # Starting heap size: 256 MB.
+        "SHELL:-sINITIAL_MEMORY=268435456"
+        # Reserve 64 MB for the C stack.
+        "SHELL:-sTOTAL_STACK=67108864"
+        # Keep the runtime alive after main() returns (event loop continues).
+        "SHELL:-sNO_EXIT_RUNTIME=1"
+        # Enable pthreads with a pre-allocated thread pool.
+        "SHELL:-sUSE_PTHREADS=1"
+        "SHELL:-sPTHREAD_POOL_SIZE=8"
+        # Emit a .wasm file alongside the JS loader.
+        "SHELL:-sWASM=1"
+        # Use the custom HTML shell that provides the canvas element.
+        "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/src/wasm/shell.html"
+    )
+endif()
+
 target_link_libraries(MarioKart64Recompiled PRIVATE
     PatchesLib
     RecompiledFuncs
@@ -360,7 +408,7 @@ target_link_libraries(MarioKart64Recompiled PRIVATE
     rt64
     RmlUi::Core
     RmlUi::Debugger
-    nfd
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:nfd>
     lunasvg
 )
 
