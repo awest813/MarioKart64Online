@@ -282,7 +282,9 @@ void recomputil_create_u32_memory_hashmap(uint8_t* rdram, recomp_context* ctx) {
 
     // Retrieve the map and set its element size to the provided value.
     U32MemoryMap* map;
-    u32_memory_hashmaps.get(map_key, &map);
+    if (!u32_memory_hashmaps.get(map_key, &map)) {
+        HANDLE_INVALID_ERROR();
+    }
     map->second = element_size;
 
     // Return the created map's key.
@@ -627,7 +629,9 @@ void recomputil_memory_slotmap_create(uint8_t* rdram, recomp_context* ctx) {
 
     // Store the allocated pointer.
     PTR(void)* value_ptr;
-    map->first.get(key, &value_ptr);
+    if (!map->first.get(key, &value_ptr)) {
+        SLOTMAP_KEY_INVALID_ERROR();
+    }
     MEM_W(0, *value_ptr) = addr;
 
     // Return the key.

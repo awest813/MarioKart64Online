@@ -240,7 +240,11 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
             float x = event->csensor.data[0] / SDL_STANDARD_GRAVITY;
             float y = event->csensor.data[1] / SDL_STANDARD_GRAVITY;
             float z = event->csensor.data[2] / SDL_STANDARD_GRAVITY;
-            ControllerState& state = InputState.controller_states[event->csensor.which];
+            auto accel_it = InputState.controller_states.find(event->csensor.which);
+            if (accel_it == InputState.controller_states.end()) {
+                break;
+            }
+            ControllerState& state = accel_it->second;
             state.latest_accelerometer[0] = x;
             state.latest_accelerometer[1] = y;
             state.latest_accelerometer[2] = z;
@@ -252,7 +256,11 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
             float x = event->csensor.data[0] * rad_to_deg;
             float y = event->csensor.data[1] * rad_to_deg;
             float z = event->csensor.data[2] * rad_to_deg;
-            ControllerState& state = InputState.controller_states[event->csensor.which];
+            auto gyro_it = InputState.controller_states.find(event->csensor.which);
+            if (gyro_it == InputState.controller_states.end()) {
+                break;
+            }
+            ControllerState& state = gyro_it->second;
             uint64_t cur_timestamp = event->csensor.timestamp;
             uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
             state.motion.ProcessMotion(x, y, z, state.latest_accelerometer[0], state.latest_accelerometer[1], state.latest_accelerometer[2], delta_ms * 0.001f);
