@@ -90,6 +90,15 @@
       cursor: pointer;
     }
     #rom-picker .pick-btn:hover { background: #ff6a1a; }
+    /* Drag-and-drop visual feedback */
+    body.drag-over #rom-picker {
+      outline: 3px dashed #e84a00;
+      outline-offset: 12px;
+      border-radius: 6px;
+    }
+    body.drag-over #rom-picker label {
+      color: #ffb800;
+    }
     #audio-unlock {
       margin: 12px 0;
       display: flex;
@@ -135,6 +144,54 @@
       word-break: break-all;
     }
     .hidden { display: none !important; }
+
+    /* -----------------------------------------------------------------------
+       Virtual on-screen gamepad — shown on touch-capable devices.
+       Buttons are positioned as an overlay on the canvas.
+       ----------------------------------------------------------------------- */
+    #vpad {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 38%;           /* occupy the bottom third of the canvas area  */
+      pointer-events: none;  /* container itself is pass-through; children intercept */
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .vpad-btn {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.35);
+      background: rgba(0,0,0,0.45);
+      color: rgba(255,255,255,0.85);
+      font-size: 1rem;
+      font-weight: bold;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      cursor: pointer;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.08s;
+    }
+    .vpad-btn.active {
+      background: rgba(232,74,0,0.65);
+      border-color: rgba(255,184,0,0.8);
+    }
+    /* D-pad cluster — bottom-left */
+    #vpad-left   { width: 13%; aspect-ratio: 1; bottom: 32%; left: 2%;  }
+    #vpad-right  { width: 13%; aspect-ratio: 1; bottom: 32%; left: 17%; }
+    #vpad-up     { width: 13%; aspect-ratio: 1; bottom: 52%; left: 9.5%; }
+    #vpad-down   { width: 13%; aspect-ratio: 1; bottom: 12%; left: 9.5%; }
+    /* Action buttons — bottom-right */
+    #vpad-a      { width: 15%; aspect-ratio: 1; bottom: 32%; right: 2%;  background: rgba(0,120,0,0.5); }
+    #vpad-b      { width: 12%; aspect-ratio: 1; bottom: 32%; right: 19%; background: rgba(150,0,0,0.5); }
+    #vpad-z      { width: 11%; aspect-ratio: 1; bottom: 58%; right: 9%;  background: rgba(80,0,140,0.5); }
+    /* Start button — bottom center */
+    #vpad-start  { width: 9%;  aspect-ratio: 1; bottom: 6%;  left: 45.5%; border-radius: 4px; font-size: 0.65rem; }
   </style>
 </head>
 <body>
@@ -161,9 +218,11 @@
   <!--
     ROM picker — shown before the WASM module starts.
     The user must supply their own copy of the US release of Mario Kart 64.
+    Accepts both file-picker clicks and drag-and-drop onto the page.
   -->
   <div id="rom-picker">
     <label>Provide your copy of the US release of Mario Kart 64 (.z64 / .n64 / .v64)</label>
+    <label style="font-size:0.78rem;color:#888;">You can also drag &amp; drop the ROM file anywhere on this page.</label>
     <button class="pick-btn" onclick="document.getElementById('rom-input').click()">
       Select ROM file…
     </button>
@@ -184,7 +243,32 @@
   <div id="canvas-container" class="hidden">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
     <div id="overlay-buttons">
+      <button class="overlay-btn" id="vpad-toggle-btn" title="Toggle on-screen controls">🎮</button>
       <button class="overlay-btn" id="fullscreen-btn" title="Toggle fullscreen">⛶ Fullscreen</button>
+    </div>
+
+    <!--
+      Virtual on-screen gamepad overlay — touch-only controls.
+      Each button dispatches a synthetic keyboard event (matching the default
+      N64 keyboard bindings) so that SDL2 picks them up via its normal
+      keyboard event path.
+
+      Default MK64 keyboard bindings used here:
+        Steer left  → A    Steer right → D
+        Gas (A btn) → Space
+        Brake (B)   → Shift
+        Item (Z)    → Q
+        Start       → Enter
+    -->
+    <div id="vpad" class="hidden">
+      <div id="vpad-left"  class="vpad-btn" data-key-code="KeyA"      data-key="a"     title="Steer left">◀</div>
+      <div id="vpad-right" class="vpad-btn" data-key-code="KeyD"      data-key="d"     title="Steer right">▶</div>
+      <div id="vpad-up"    class="vpad-btn" data-key-code="KeyW"      data-key="w"     title="Steer up">▲</div>
+      <div id="vpad-down"  class="vpad-btn" data-key-code="KeyS"      data-key="s"     title="Steer down">▼</div>
+      <div id="vpad-a"     class="vpad-btn" data-key-code="Space"     data-key=" "     title="Gas / Confirm">A</div>
+      <div id="vpad-b"     class="vpad-btn" data-key-code="ShiftLeft" data-key="Shift" title="Brake / Back">B</div>
+      <div id="vpad-z"     class="vpad-btn" data-key-code="KeyQ"      data-key="q"     title="Use item">Z</div>
+      <div id="vpad-start" class="vpad-btn" data-key-code="Enter"     data-key="Enter" title="Start / Pause">START</div>
     </div>
   </div>
 
@@ -203,9 +287,9 @@
     }
 
     // ---------------------------------------------------------------------------
-    // Fullscreen toggle
+    // Fullscreen toggle (button + F11 key)
     // ---------------------------------------------------------------------------
-    document.getElementById('fullscreen-btn').addEventListener('click', function () {
+    function _toggleFullscreen() {
       var container = document.getElementById('canvas-container');
       if (!document.fullscreenElement) {
         container.requestFullscreen().catch(function (err) {
@@ -214,23 +298,38 @@
       } else {
         document.exitFullscreen();
       }
-    });
+    }
+
+    document.getElementById('fullscreen-btn').addEventListener('click', _toggleFullscreen);
 
     document.addEventListener('fullscreenchange', function () {
       var btn = document.getElementById('fullscreen-btn');
       btn.textContent = document.fullscreenElement ? '✕ Exit fullscreen' : '⛶ Fullscreen';
     });
 
+    // Intercept F11 so it toggles canvas fullscreen instead of the whole browser.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        _toggleFullscreen();
+      }
+    });
+
     // ---------------------------------------------------------------------------
-    // ROM staging — write the selected ROM into the Emscripten virtual FS so the
-    // game loader can find it at the path it expects.
+    // ROM loading helper — shared by the file-picker and drag-and-drop paths.
     // ---------------------------------------------------------------------------
     const ROM_PATH = '/mk64.us.z64';
     var _pendingRomData = null;
 
-    document.getElementById('rom-input').addEventListener('change', function (e) {
-      var file = e.target.files[0];
+    function _loadRomFile(file) {
       if (!file) return;
+      var name = file.name.toLowerCase();
+      if (!name.endsWith('.z64') && !name.endsWith('.n64') && !name.endsWith('.v64')) {
+        var banner = document.getElementById('error-banner');
+        banner.textContent = 'Invalid file: please provide a Mario Kart 64 ROM (.z64, .n64, or .v64).';
+        banner.classList.remove('hidden');
+        return;
+      }
 
       var reader = new FileReader();
       reader.onload = function (ev) {
@@ -241,6 +340,36 @@
         document.getElementById('audio-unlock').classList.remove('hidden');
       };
       reader.readAsArrayBuffer(file);
+    }
+
+    // ---------------------------------------------------------------------------
+    // File-picker input
+    // ---------------------------------------------------------------------------
+    document.getElementById('rom-input').addEventListener('change', function (e) {
+      _loadRomFile(e.target.files[0]);
+    });
+
+    // ---------------------------------------------------------------------------
+    // Drag-and-drop ROM loading
+    // ---------------------------------------------------------------------------
+    document.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      document.body.classList.add('drag-over');
+    });
+    document.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      document.body.classList.add('drag-over');
+    });
+    document.addEventListener('dragleave', function (e) {
+      // Only remove the class when the pointer actually leaves the window.
+      if (!e.relatedTarget) {
+        document.body.classList.remove('drag-over');
+      }
+    });
+    document.addEventListener('drop', function (e) {
+      e.preventDefault();
+      document.body.classList.remove('drag-over');
+      _loadRomFile(e.dataTransfer.files[0]);
     });
 
     // ---------------------------------------------------------------------------
@@ -268,9 +397,84 @@
       document.getElementById('progress-container').classList.remove('hidden');
       document.getElementById('status-bar').textContent = 'Initializing…';
 
+      // Show the virtual gamepad automatically on touch-capable devices.
+      if (navigator.maxTouchPoints > 0) {
+        document.getElementById('vpad').classList.remove('hidden');
+      }
+
       // Now that we have a user gesture, write the ROM and start the module.
       _startModule();
     });
+
+    // ---------------------------------------------------------------------------
+    // Virtual on-screen gamepad
+    //
+    // Each .vpad-btn element carries a `data-key-code` attribute that matches a
+    // DOM KeyboardEvent `code` value (e.g. "Space", "KeyA").  SDL2's Emscripten
+    // backend listens for keydown/keyup events on the document and maps the
+    // `code` field to SDL_Scancode, so dispatching synthetic events here is
+    // enough to drive the game's input system.
+    // ---------------------------------------------------------------------------
+    document.getElementById('vpad-toggle-btn').addEventListener('click', function () {
+      var vpad = document.getElementById('vpad');
+      vpad.classList.toggle('hidden');
+    });
+
+    (function () {
+      var heldKeys = {};
+
+      function _fireKey(code, key, down) {
+        var type = down ? 'keydown' : 'keyup';
+        document.dispatchEvent(new KeyboardEvent(type, {
+          code: code,
+          key: key,
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+
+      function _pressButton(btn, code, key) {
+        if (!heldKeys[code]) {
+          heldKeys[code] = true;
+          btn.classList.add('active');
+          _fireKey(code, key, true);
+        }
+      }
+
+      function _releaseButton(btn, code, key) {
+        if (heldKeys[code]) {
+          heldKeys[code] = false;
+          btn.classList.remove('active');
+          _fireKey(code, key, false);
+        }
+      }
+
+      function _onTouchStart(e) {
+        e.preventDefault();
+        _pressButton(e.currentTarget, e.currentTarget.dataset.keyCode, e.currentTarget.dataset.key);
+      }
+
+      function _onTouchEnd(e) {
+        e.preventDefault();
+        _releaseButton(e.currentTarget, e.currentTarget.dataset.keyCode, e.currentTarget.dataset.key);
+      }
+
+      // Attach listeners to every virtual-pad button.
+      document.querySelectorAll('.vpad-btn').forEach(function (btn) {
+        btn.addEventListener('touchstart', _onTouchStart, { passive: false });
+        btn.addEventListener('touchend',   _onTouchEnd,   { passive: false });
+        btn.addEventListener('touchcancel',_onTouchEnd,   { passive: false });
+        // Also support mouse clicks for testing on desktops.
+        btn.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          _pressButton(btn, btn.dataset.keyCode, btn.dataset.key);
+        });
+        btn.addEventListener('mouseup', function (e) {
+          e.preventDefault();
+          _releaseButton(btn, btn.dataset.keyCode, btn.dataset.key);
+        });
+      });
+    }());
 
     // ---------------------------------------------------------------------------
     // Module bootstrap — called after the user gesture so that audio and FS

@@ -137,6 +137,8 @@ config) otherwise the game will not start.
   copy of the **US release** of Mario Kart 64 at runtime — no server-side ROM
   storage is involved.  Only the US (NTSC) version is supported; other regional
   releases will be rejected by the game loader.
+* **Drag-and-drop:** instead of clicking "Select ROM file…", you can drag a
+  `.z64`, `.n64`, or `.v64` ROM file anywhere onto the page to load it.
 * **Audio:** the page shows an "Enable audio & start" button before launching
   the game.  This click acts as the required user gesture that lets the browser
   allow audio output.
@@ -145,7 +147,21 @@ config) otherwise the game will not start.
   and survive page reloads.  Data is flushed to IndexedDB every 10 seconds
   while the game is running.
 * **Fullscreen:** use the ⛶ button in the top-right corner of the canvas, or
-  press F11 / the browser's own fullscreen shortcut.
+  press F11 to toggle canvas fullscreen.
+* **Touch / mobile controls:** on touch-capable devices the on-screen gamepad
+  overlay appears automatically when the game starts.  It can also be toggled
+  at any time with the 🎮 button.  The default button mapping is:
+
+  | On-screen button | N64 button | Keyboard key |
+  |-----------------|-----------|--------------|
+  | ◀ / ▶ / ▲ / ▼  | Analog stick | A / D / W / S |
+  | **A** (green)   | A (gas / confirm) | Space |
+  | **B** (red)     | B (brake / back)  | Shift |
+  | **Z** (purple)  | Z (use item)      | Q |
+  | **START**       | Start / Pause     | Enter |
+
+* **Error messages:** fatal errors from the C++ runtime are surfaced in a
+  visible red banner on the page in addition to the browser console.
 * The native graphics back-end (RT64) uses Vulkan / DirectX 12 / Metal which
   are not available in browsers.  Porting the renderer to WebGL / WebGPU is the
   main remaining work item.

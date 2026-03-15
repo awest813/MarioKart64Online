@@ -3,6 +3,9 @@
 #ifndef __EMSCRIPTEN__
 #include "nfd.h"
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include "RmlUi/Core.h"
 
 namespace zelda64 {
@@ -93,6 +96,17 @@ namespace zelda64 {
     void show_error_message_box(const char *title, const char *message) {
 #ifdef __EMSCRIPTEN__
         fprintf(stderr, "Error: %s - %s\n", title, message);
+        // Also surface the error in the page's error banner so users can see it
+        // without opening the browser developer tools.
+        EM_ASM({
+            var banner = document.getElementById('error-banner');
+            if (banner) {
+                var t = UTF8ToString($0);
+                var m = UTF8ToString($1);
+                banner.textContent = t + ': ' + m;
+                banner.classList.remove('hidden');
+            }
+        }, title, message);
 #elif defined(__APPLE__)
     std::string title_copy(title);
     std::string message_copy(message);
