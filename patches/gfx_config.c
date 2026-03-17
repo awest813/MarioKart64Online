@@ -64,7 +64,6 @@ RECOMP_PATCH void create_gfx_task_structure(void) {
         recomp_printf("GFXPOOL is full!\n data_size: %x\n\n", gGfxSPTask->task.t.data_size);
         *(volatile int*) 0 = 0;
     }
-    u32 bytesLeft = poolMaxBytes - gGfxSPTask->task.t.data_size;
 }
 #endif
 

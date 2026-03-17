@@ -614,7 +614,7 @@ float controller_axis_state(int32_t input_id, bool allow_suppression) {
 
         return std::clamp(ret, 0.0f, 1.0f);
     }
-    return false;
+    return 0.0f;
 }
 
 float recomp::get_input_analog(const recomp::InputField& field) {
