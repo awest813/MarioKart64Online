@@ -179,7 +179,10 @@ std::filesystem::path zelda64::get_app_folder_path() {
 
    if ((homedir = getenv("HOME")) == nullptr) {
     #if defined(__linux__)
-       homedir = getpwuid(getuid())->pw_dir;
+       struct passwd* pwd = getpwuid(getuid());
+       if (pwd != nullptr) {
+           homedir = pwd->pw_dir;
+       }
     #elif defined(__APPLE__)
         homedir = GetHomeDirectory();
     #endif

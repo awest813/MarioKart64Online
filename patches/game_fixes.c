@@ -221,34 +221,7 @@ RECOMP_PATCH void race_logic_loop(void) {
             break;
 
         case SCREEN_MODE_3P_4P_SPLITSCREEN:
-            if (gPlayerCountSelection1 == 3) {
-                switch (gCurrentCourseId) {
-                    case COURSE_BOWSER_CASTLE:
-                    case COURSE_MOO_MOO_FARM:
-                    case COURSE_SKYSCRAPER:
-                    case COURSE_DK_JUNGLE:
-                        gTickSpeed = 2;
-                        break;
-                    default:
-                        gTickSpeed = 2;
-                        break;
-                }
-            } else {
-                // Four players
-                switch (gCurrentCourseId) {
-                    case COURSE_BLOCK_FORT:
-                    case COURSE_DOUBLE_DECK:
-                    case COURSE_BIG_DONUT:
-                        gTickSpeed = 2;
-                        break;
-                    case COURSE_DK_JUNGLE:
-                        gTickSpeed = 2;
-                        break;
-                    default:
-                        gTickSpeed = 2;
-                        break;
-                }
-            }
+            gTickSpeed = 2;
             if (gIsGamePaused == 0) {
                 for (i = 0; i < gTickSpeed; i++) {
                     if (D_8015011E != 0) {
